@@ -10,10 +10,10 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 const (
@@ -49,7 +49,7 @@ func encrypt(msg, secret string, now time.Time, genIV func([]byte) error) (strin
 	binary.BigEndian.PutUint64(tok[tsOffset:], uint64(now.Unix()))
 	// Generate the IV.
 	if err := genIV(tok[ivOffset:]); err != nil {
-		return "", errors.Wrap(err, "fernet: failed to generate IV")
+		return "", fmt.Errorf("fernet: failed to generate IV: %v", err)
 	}
 	iv := tok[ivOffset : ivOffset+aes.BlockSize]
 	// Pad the plaintext and encrypt it in place.
@@ -73,7 +73,7 @@ func Decrypt(token, secret string, now time.Time, ttl time.Duration) (string, er
 	// Base64-decode the token.
 	tok, err := base64.URLEncoding.DecodeString(token)
 	if err != nil {
-		return "", errors.Wrap(err, "fernet: failed to decode token")
+		return "", fmt.Errorf("fernet: failed to decode token: %v", err)
 	}
 	// Extract keys from the secret.
 	signingKey, encryptionKey, err := extractKeys(secret)
@@ -130,7 +130,7 @@ func Decrypt(token, secret string, now time.Time, ttl time.Duration) (string, er
 func RandomSecret() (string, error) {
 	var b [2 * keyLen]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return "", errors.Wrap(err, "fernet: failed to read from rand source")
+		return "", fmt.Errorf("fernet: failed to read from rand source: %v", err)
 	}
 	return base64.URLEncoding.EncodeToString(b[0:]), nil
 }
@@ -173,7 +173,7 @@ func unpad(p []byte) []byte {
 func extractKeys(secret string) (signing, encryption []byte, err error) {
 	keys, err := base64.URLEncoding.DecodeString(secret)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "fernet: failed to decode secret")
+		return nil, nil, fmt.Errorf("fernet: failed to decode secret: %v", err)
 	}
 	if len(keys) != 2*keyLen {
 		return nil, nil, errors.New("fernet: secret must be 32 bytes")
